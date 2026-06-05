@@ -116,6 +116,10 @@ const state = {
   editingItemId:   null,   // null = thêm mới, có id = đang sửa
   imageBase64:     null,
   imageFileName:   null,
+  docBase64:       null,
+  docFileName:     null,
+  docMimeType:     null,
+  docFileSize:     0,
 };
 
 /* ============================================================
@@ -617,13 +621,18 @@ async function downloadItem(id) {
   /* ── iOS: xử lý riêng hoàn toàn miễn phí, không cần iCloud ── */
   if (isIOS()) {
     if (item.type === 'image') {
-      /* Hiện ảnh toàn màn hình → người dùng nhấn giữ → "Lưu vào Ảnh" (Photos, miễn phí) */
       showImageViewer(item);
+    } else if (item.type === 'file') {
+      /* File tài liệu trên iOS: mở tab mới để tải */
+      const blob    = dataUrlToBlob(item.content);
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      showToast('File đã mở trong tab mới. Nhấn giữ → Tải xuống.', 'info');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } else {
-      /* Ghi chú / Link: copy vào clipboard — miễn phí, không cần lưu file */
       const text = item.type === 'note'
         ? `${item.title}\n${'─'.repeat(40)}\n\n${item.content}`
-        : `${item.title}\n${item.content}${item.description ? '\n' + item.description : ''}`;
+        : `${item.title}\n${item.content}`;
       await copyToClipboard(text, item.title);
     }
     return;
@@ -644,12 +653,16 @@ async function downloadItem(id) {
       blob     = dataUrlToBlob(item.content);
       fileName = item.fileName || slugify(item.title) + '.jpg';
 
+    } else if (item.type === 'file') {
+      /* Tài liệu: giải mã data URL về blob gốc với đúng MIME type */
+      blob     = dataUrlToBlob(item.content);
+      fileName = item.fileName || slugify(item.title);
+
     } else {
       const text = [
         `Tiêu đề : ${item.title}`,
         `URL      : ${item.content}`,
-        item.description ? `Mô tả    : ${item.description}` : '',
-      ].filter(Boolean).join('\n');
+      ].join('\n');
       blob     = new Blob([text], { type: 'text/plain;charset=utf-8' });
       fileName = slugify(item.title) + '.txt';
     }
@@ -791,25 +804,100 @@ function handleImageFile(file) {
 }
 
 /* ============================================================
+   FILE (TÀI LIỆU) HANDLING
+   ============================================================ */
+const FILE_MAX_BYTES = 700 * 1024; // 700 KB — giữ document Firestore < 1 MB
+
+/* Trả về icon + màu theo loại file */
+function getFileIconInfo(mimeType, fileName) {
+  const ext  = (fileName || '').split('.').pop().toLowerCase();
+  const mime = mimeType || '';
+  if (mime.includes('pdf')         || ext === 'pdf')
+    return { icon: 'fa-file-pdf',        color: '#ff453a' };
+  if (mime.includes('word')        || ['doc','docx'].includes(ext))
+    return { icon: 'fa-file-word',       color: '#2b7fff' };
+  if (mime.includes('excel') || mime.includes('spreadsheet') || ['xls','xlsx','csv'].includes(ext))
+    return { icon: 'fa-file-excel',      color: '#30d158' };
+  if (mime.includes('powerpoint')  || ['ppt','pptx'].includes(ext))
+    return { icon: 'fa-file-powerpoint', color: '#ff9f0a' };
+  if (['zip','rar','7z','tar','gz'].includes(ext))
+    return { icon: 'fa-file-zipper',     color: '#bf5af2' };
+  if (mime.includes('text') || ['txt','md','log'].includes(ext))
+    return { icon: 'fa-file-lines',      color: '#98989e' };
+  if (mime.includes('audio')       || ['mp3','wav','aac'].includes(ext))
+    return { icon: 'fa-file-audio',      color: '#30d158' };
+  if (mime.includes('video')       || ['mp4','mov','avi'].includes(ext))
+    return { icon: 'fa-file-video',      color: '#ff453a' };
+  return { icon: 'fa-file',             color: '#98989e' };
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function handleDocumentFile(file) {
+  if (!file) return;
+
+  if (file.size > FILE_MAX_BYTES) {
+    showToast(
+      `File quá lớn (${formatFileSize(file.size)}). Tối đa ${formatFileSize(FILE_MAX_BYTES)}.`,
+      'error'
+    );
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.docBase64    = e.target.result;  // data:<mime>;base64,...
+    state.docFileName  = file.name;
+    state.docMimeType  = file.type;
+    state.docFileSize  = file.size;
+
+    /* Cập nhật UI trong modal */
+    const info = getFileIconInfo(file.type, file.name);
+    $('docSelectedIcon').className = `fas ${info.icon} doc-selected-icon`;
+    $('docSelectedIcon').style.color = info.color;
+    $('docSelectedName').textContent = file.name;
+    $('docSelectedSize').textContent = formatFileSize(file.size);
+    $('docSelectedWrap').classList.remove('hidden');
+    $('docDropContent').classList.add('hidden');
+
+    /* Tự điền tên nếu trống */
+    const titleEl = $('fileTitle');
+    if (titleEl && !titleEl.value) {
+      titleEl.value = file.name.replace(/\.[^.]+$/, '');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ============================================================
    MODAL — Thêm mục mới
    ============================================================ */
 function openAddModal(type) {
   state.pendingItemType = type;
-  state.imageBase64     = null;
-  state.imageFileName   = null;
+  state.imageBase64 = null; state.imageFileName = null;
+  state.docBase64   = null; state.docFileName   = null;
+  state.docMimeType = null; state.docFileSize   = 0;
 
-  ['noteForm','imageForm','linkForm'].forEach(id => hide($(id)));
-  ['noteTitle','noteContent','imageTitle','linkTitle','linkUrl','linkDesc'].forEach(id => {
+  ['noteForm','imageForm','linkForm','fileForm'].forEach(id => hide($(id)));
+  ['noteTitle','noteContent','imageTitle','linkTitle','linkUrl','linkDesc','fileTitle'].forEach(id => {
     const el = $(id); if (el) el.value = '';
   });
   $('imagePreviewWrap')?.classList.add('hidden');
   $('dropZoneContent')?.classList.remove('hidden');
   $('imageFile').value = '';
+  $('docSelectedWrap')?.classList.add('hidden');
+  $('docDropContent')?.classList.remove('hidden');
+  if ($('docFile')) $('docFile').value = '';
 
   const cfg = {
-    note:  { title: 'THÊM GHI CHÚ',  icon: 'fa-file-lines', formId: 'noteForm',  focus: 'noteTitle' },
-    image: { title: 'THÊM HÌNH ẢNH', icon: 'fa-image',      formId: 'imageForm', focus: 'imageTitle' },
-    link:  { title: 'THÊM LIÊN KẾT', icon: 'fa-link',       formId: 'linkForm',  focus: 'linkTitle' },
+    note:  { title: 'THÊM GHI CHÚ',   icon: 'fa-file-lines',    formId: 'noteForm',  focus: 'noteTitle' },
+    image: { title: 'THÊM HÌNH ẢNH',  icon: 'fa-image',          formId: 'imageForm', focus: 'imageTitle' },
+    link:  { title: 'THÊM LIÊN KẾT',  icon: 'fa-link',           formId: 'linkForm',  focus: 'linkTitle' },
+    file:  { title: 'THÊM TÀI LIỆU',  icon: 'fa-file-arrow-up',  formId: 'fileForm',  focus: 'fileTitle' },
   }[type];
 
   $('modalTitle').textContent = cfg.title;
@@ -914,6 +1002,14 @@ async function saveItem() {
       if (!title)               { shakeEl($('linkTitle')); showToast('Nhập tên liên kết!', 'warning'); return; }
       if (!content)             { shakeEl($('linkUrl'));   showToast('Nhập địa chỉ URL!', 'warning'); return; }
       if (!isValidUrl(content)) { shakeEl($('linkUrl'));   showToast('URL không hợp lệ! Cần bắt đầu bằng http:// hoặc https://', 'warning'); return; }
+
+    } else if (type === 'file') {
+      title    = $('fileTitle').value.trim();
+      if (!title)             { shakeEl($('fileTitle')); showToast('Nhập tên tài liệu!', 'warning'); return; }
+      if (!state.docBase64)   { showToast('Chưa chọn file!', 'warning'); return; }
+      content  = state.docBase64;
+      fileName = state.docFileName;
+      description = `${state.docMimeType || ''}|${state.docFileSize || 0}`;
     }
 
     /* ── CHẾ ĐỘ SỬA ── */
@@ -1030,13 +1126,26 @@ function createCard(item, isTrash) {
   card.className = `item-card card-type-${item.type}`;
   card.dataset.id = item.id;
 
-  const typeLabel = { note:'GHI CHÚ', image:'HÌNH ẢNH', link:'LIÊN KẾT' }[item.type];
-  const typeIcon  = { note:'fa-file-lines', image:'fa-image', link:'fa-link' }[item.type];
+  const typeLabel = { note:'GHI CHÚ', image:'HÌNH ẢNH', link:'LIÊN KẾT', file:'TÀI LIỆU' }[item.type];
+  const typeIcon  = { note:'fa-file-lines', image:'fa-image', link:'fa-link', file:'fa-file-arrow-up' }[item.type];
   const dateStr   = formatDate(isTrash ? item.trashedAt : item.createdAt);
 
   let contentHtml = '';
   if (item.type === 'note') {
     contentHtml = `<p class="card-note-content">${escHtml(item.content)}</p>`;
+  } else if (item.type === 'file') {
+    /* Tài liệu: icon theo loại + tên file + kích thước */
+    const [mime, sizeStr] = (item.description || '|0').split('|');
+    const fileSize = parseInt(sizeStr) || 0;
+    const info = getFileIconInfo(mime, item.fileName || item.title);
+    contentHtml = `
+      <div class="card-file-body">
+        <i class="fas ${info.icon} card-file-icon" style="color:${info.color}"></i>
+        <div class="card-file-meta">
+          <span class="card-file-name">${escHtml(item.fileName || item.title)}</span>
+          <span class="card-file-size">${fileSize ? formatFileSize(fileSize) : '—'}</span>
+        </div>
+      </div>`;
   } else if (item.type === 'image') {
     /* Nếu content là placeholder '[cached]', hiện icon thay thế */
     if (item.content === '[cached]') {
@@ -1709,6 +1818,29 @@ function setupEvents() {
     $('imageFile').value = '';
     $('imagePreviewWrap').classList.add('hidden');
     $('dropZoneContent').classList.remove('hidden');
+  });
+
+  /* ── DOCUMENT FILE UPLOAD ── */
+  $('docDropZone').addEventListener('click', e => {
+    if (!e.target.closest('.remove-preview-btn')) $('docFile').click();
+  });
+  $('docFile').addEventListener('change', e => {
+    if (e.target.files[0]) handleDocumentFile(e.target.files[0]);
+  });
+  ['dragover','dragleave','drop'].forEach(evt =>
+    $('docDropZone').addEventListener(evt, e => {
+      e.preventDefault();
+      $('docDropZone').classList.toggle('drag-over', evt === 'dragover');
+      if (evt === 'drop' && e.dataTransfer.files[0]) handleDocumentFile(e.dataTransfer.files[0]);
+    })
+  );
+  $('removeDocBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    state.docBase64 = null; state.docFileName = null;
+    state.docMimeType = null; state.docFileSize = 0;
+    $('docFile').value = '';
+    $('docSelectedWrap').classList.add('hidden');
+    $('docDropContent').classList.remove('hidden');
   });
 
   /* ── CONFIRM MODAL ── */

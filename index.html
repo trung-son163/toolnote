@@ -266,6 +266,9 @@
           <button class="filter-tab" data-filter="link">
             <i class="fas fa-link"></i><span>Liên Kết</span>
           </button>
+          <button class="filter-tab" data-filter="file">
+            <i class="fas fa-file-arrow-up"></i><span>Tài Liệu</span>
+          </button>
         </div>
         <div class="item-count">
           <span id="itemCountText">0 mục</span>
@@ -322,6 +325,10 @@
       <button class="fab-option" data-type="note" title="Thêm ghi chú">
         <span class="fab-option-label">Ghi Chú</span>
         <i class="fas fa-file-lines"></i>
+      </button>
+      <button class="fab-option" data-type="file" title="Thêm tài liệu">
+        <span class="fab-option-label">Tài Liệu</span>
+        <i class="fas fa-file-arrow-up"></i>
       </button>
     </div>
     <button class="fab-main" id="fabMain" title="Thêm mục mới">
@@ -417,6 +424,37 @@
             <div class="image-preview-wrap hidden" id="imagePreviewWrap">
               <img id="imagePreviewEl" alt="Preview" class="image-preview-img">
               <button class="remove-preview-btn" id="removePreviewBtn">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form tài liệu -->
+      <div id="fileForm" class="item-form hidden">
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-heading"></i> TÊN TÀI LIỆU</label>
+          <input type="text" id="fileTitle" class="form-input" placeholder="Tên tài liệu..." maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-file-arrow-up"></i> CHỌN FILE</label>
+          <div class="file-drop-zone" id="docDropZone">
+            <input type="file" id="docFile" class="file-input-hidden"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.mp3,.mp4">
+            <div class="drop-zone-content" id="docDropContent">
+              <i class="fas fa-file-arrow-up drop-icon"></i>
+              <p class="drop-text">Kéo thả tài liệu vào đây</p>
+              <p class="drop-subtext">hoặc <span class="browse-link">chọn từ máy tính</span></p>
+              <p class="drop-hint">PDF, Word, Excel, ZIP, TXT... — tối đa 700 KB</p>
+            </div>
+            <div class="doc-selected-wrap hidden" id="docSelectedWrap">
+              <i class="fas fa-file doc-selected-icon" id="docSelectedIcon"></i>
+              <div class="doc-selected-info">
+                <span class="doc-selected-name" id="docSelectedName">—</span>
+                <span class="doc-selected-size" id="docSelectedSize">—</span>
+              </div>
+              <button class="remove-preview-btn" id="removeDocBtn" type="button">
                 <i class="fas fa-times"></i>
               </button>
             </div>

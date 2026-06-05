@@ -1052,6 +1052,13 @@ body {
 .card-type-note .card-accent-bar  { background: linear-gradient(90deg, var(--cyan), var(--purple)); }
 .card-type-image .card-accent-bar { background: linear-gradient(90deg, var(--purple), var(--green)); }
 .card-type-link .card-accent-bar  { background: linear-gradient(90deg, var(--green), var(--cyan)); }
+.card-type-file .card-accent-bar  { background: linear-gradient(90deg, var(--orange), var(--yellow)); }
+
+.card-type-file .card-type-badge  {
+  color: var(--orange);
+  border-color: rgba(255,149,0,0.35);
+  background: rgba(255,149,0,0.1);
+}
 
 .card-body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
 
@@ -1205,6 +1212,59 @@ body {
 .card-link-desc {
   font-size: 0.82rem;
   color: var(--text-secondary);
+}
+
+/* ── File card content ── */
+.card-file-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+}
+
+.card-file-icon {
+  font-size: 2.2rem;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.card-file-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.card-file-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.3;
+}
+.card-file-size {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+/* ── Doc selected (trong modal) ── */
+.doc-selected-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  width: 100%;
+}
+
+.doc-selected-icon { font-size: 2rem; flex-shrink: 0; }
+.doc-selected-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.doc-selected-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.3;
+}
+.doc-selected-size {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--cyan-dim);
 }
 
 /* Footer thẻ */
