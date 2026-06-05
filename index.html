@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Secure Hub</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ===== MÀN HÌNH KHÓA ===== -->
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-bg-grid"></div>
+  <div class="lock-scanline"></div>
+  <canvas id="particleCanvas" class="particle-canvas"></canvas>
+
+  <div class="lock-container">
+    <div class="lock-logo">
+      <div class="lock-logo-icon">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="12" y="28" width="40" height="28" rx="3" stroke="currentColor" stroke-width="2.5" fill="none"/>
+          <path d="M20 28V20C20 14.477 25.373 10 32 10C38.627 10 44 14.477 44 20V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="32" cy="42" r="5" fill="currentColor" opacity="0.9"/>
+          <line x1="32" y1="47" x2="32" y2="52" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="4" y="2" width="8" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+          <rect x="52" y="2" width="8" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+          <rect x="4" y="58" width="8" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+          <rect x="52" y="58" width="8" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+        </svg>
+      </div>
+      <h1 class="lock-title">PERSONAL SECURE HUB</h1>
+      <p class="lock-subtitle" id="lockSubtitle">INITIALIZING SECURE SYSTEM...</p>
+    </div>
+
+    <!-- Form thiết lập mật khẩu (lần đầu) -->
+    <div id="setupForm" class="lock-form hidden">
+      <p class="lock-form-label">THIẾT LẬP XÁC THỰC</p>
+
+      <!-- Chọn chế độ xác thực -->
+      <div class="auth-mode-selector">
+        <button class="mode-btn active" data-mode="password" id="modePasswordBtn">
+          <i class="fas fa-keyboard"></i> Mật Khẩu
+        </button>
+        <button class="mode-btn" data-mode="pin" id="modePinBtn">
+          <i class="fas fa-hashtag"></i> PIN 6 Số
+        </button>
+      </div>
+
+      <!-- Nhập mật khẩu văn bản -->
+      <div id="setupPasswordSection">
+        <div class="lock-input-group">
+          <i class="fas fa-lock input-icon"></i>
+          <input type="password" id="setupPassword" class="lock-input" placeholder="Mật khẩu (tối thiểu 4 ký tự)" maxlength="64" autocomplete="new-password">
+          <button class="toggle-pw-btn" data-target="setupPassword"><i class="fas fa-eye"></i></button>
+        </div>
+        <div class="lock-input-group">
+          <i class="fas fa-shield-halved input-icon"></i>
+          <input type="password" id="setupConfirm" class="lock-input" placeholder="Xác nhận mật khẩu" maxlength="64" autocomplete="new-password">
+          <button class="toggle-pw-btn" data-target="setupConfirm"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+
+      <!-- Nhập PIN 6 số (ẩn theo mặc định) -->
+      <div id="setupPinSection" class="hidden">
+        <p class="pin-instruction">Nhập PIN 6 chữ số của bạn</p>
+        <div class="pin-display" id="setupPinDisplay">
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+        </div>
+        <div class="pin-pad">
+          <button class="pin-key" data-key="1">1</button>
+          <button class="pin-key" data-key="2">2</button>
+          <button class="pin-key" data-key="3">3</button>
+          <button class="pin-key" data-key="4">4</button>
+          <button class="pin-key" data-key="5">5</button>
+          <button class="pin-key" data-key="6">6</button>
+          <button class="pin-key" data-key="7">7</button>
+          <button class="pin-key" data-key="8">8</button>
+          <button class="pin-key" data-key="9">9</button>
+          <button class="pin-key pin-func" data-key="clear">CLR</button>
+          <button class="pin-key" data-key="0">0</button>
+          <button class="pin-key pin-func" data-key="back"><i class="fas fa-delete-left"></i></button>
+        </div>
+      </div>
+
+      <button id="setupBtn" class="lock-btn primary-btn">
+        <i class="fas fa-rocket"></i> KHỞI TẠO HỆ THỐNG
+      </button>
+      <p id="setupError" class="lock-error hidden"></p>
+    </div>
+
+    <!-- Form đăng nhập -->
+    <div id="loginForm" class="lock-form hidden">
+      <p class="lock-form-label" id="loginFormLabel">NHẬP XÁC THỰC</p>
+
+      <!-- Chế độ mật khẩu văn bản -->
+      <div id="loginPasswordSection" class="hidden">
+        <div class="lock-input-group">
+          <i class="fas fa-lock input-icon"></i>
+          <input type="password" id="loginPassword" class="lock-input" placeholder="Nhập mật khẩu..." maxlength="64" autocomplete="current-password">
+          <button class="toggle-pw-btn" data-target="loginPassword"><i class="fas fa-eye"></i></button>
+        </div>
+        <button id="loginPasswordBtn" class="lock-btn primary-btn">
+          <i class="fas fa-sign-in-alt"></i> TRUY CẬP
+        </button>
+        <button class="lock-toggle-btn" id="switchToPinBtn" style="display:none">
+          <i class="fas fa-hashtag"></i> Dùng PIN
+        </button>
+      </div>
+
+      <!-- Chế độ PIN -->
+      <div id="loginPinSection" class="hidden">
+        <div class="pin-display" id="loginPinDisplay">
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+          <span class="pin-dot"></span><span class="pin-dot"></span>
+        </div>
+        <div class="pin-pad">
+          <button class="pin-key" data-key="1">1</button>
+          <button class="pin-key" data-key="2">2</button>
+          <button class="pin-key" data-key="3">3</button>
+          <button class="pin-key" data-key="4">4</button>
+          <button class="pin-key" data-key="5">5</button>
+          <button class="pin-key" data-key="6">6</button>
+          <button class="pin-key" data-key="7">7</button>
+          <button class="pin-key" data-key="8">8</button>
+          <button class="pin-key" data-key="9">9</button>
+          <button class="pin-key pin-func" data-key="clear">CLR</button>
+          <button class="pin-key" data-key="0">0</button>
+          <button class="pin-key pin-func" data-key="back"><i class="fas fa-delete-left"></i></button>
+        </div>
+        <button class="lock-toggle-btn" id="switchToPasswordBtn">
+          <i class="fas fa-keyboard"></i> Dùng Mật Khẩu
+        </button>
+      </div>
+
+      <p id="loginError" class="lock-error hidden"></p>
+      <p id="attemptsWarning" class="lock-warning hidden"></p>
+    </div>
+
+    <div class="lock-status-bar">
+      <span class="status-indicator"></span>
+      <span id="lockStatusText">ĐANG KHỞI ĐỘNG...</span>
+      <span class="status-indicator"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ỨNG DỤNG CHÍNH ===== -->
+<div id="app" class="app hidden">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <i class="fas fa-shield-halved brand-icon"></i>
+        <span class="brand-text">PSH</span>
+      </div>
+      <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Thu gọn">
+        <i class="fas fa-angles-left"></i>
+      </button>
+    </div>
+
+    <div class="sidebar-nav">
+      <a class="nav-item active" data-section="dashboard" href="#">
+        <i class="fas fa-microchip nav-icon"></i>
+        <span class="nav-label">Dashboard</span>
+      </a>
+      <a class="nav-item" data-section="trash" href="#">
+        <i class="fas fa-trash-can nav-icon"></i>
+        <span class="nav-label">Thùng Rác</span>
+        <span class="badge hidden" id="trashBadge">0</span>
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-tools">
+      <button class="nav-item tool-btn" id="calcToggleBtn" title="Calculator">
+        <i class="fas fa-calculator nav-icon"></i>
+        <span class="nav-label">Máy Tính</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar"><i class="fas fa-user-astronaut"></i></div>
+        <div class="user-details">
+          <span class="user-name">Secure User</span>
+          <span class="user-status">Đã Xác Thực</span>
+        </div>
+      </div>
+      <button class="lock-btn-sidebar" id="lockBtn" title="Khóa ứng dụng">
+        <i class="fas fa-lock"></i>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Overlay mobile -->
+  <div class="sidebar-overlay hidden" id="sidebarOverlay"></div>
+
+  <!-- Nội dung chính -->
+  <div class="main-wrapper">
+
+    <!-- Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="hamburger-btn" id="hamburgerBtn">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="section-breadcrumb">
+          <i class="fas fa-microchip" id="breadcrumbIcon"></i>
+          <h2 id="breadcrumbTitle">DASHBOARD</h2>
+        </div>
+      </div>
+      <div class="header-center">
+        <div class="search-wrapper">
+          <i class="fas fa-magnifying-glass search-icon"></i>
+          <input type="text" id="searchInput" class="search-input" placeholder="Tìm kiếm dữ liệu...">
+          <button class="search-clear hidden" id="searchClear"><i class="fas fa-xmark"></i></button>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="sync-status local" id="syncStatus" title="Trạng thái đồng bộ Firebase">
+          <div class="sync-dot" id="syncDot"></div>
+          <span id="syncStatusText">LOCAL</span>
+        </div>
+        <div class="auto-lock-display" id="autoLockDisplay" title="Tự động khóa sau khi không hoạt động">
+          <i class="fas fa-clock-rotate-left"></i>
+          <span id="autoLockTimer">05:00</span>
+        </div>
+        <button class="header-btn" id="headerCalcBtn" title="Máy tính">
+          <i class="fas fa-calculator"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Dashboard Section -->
+    <section id="dashboardSection" class="content-section active">
+      <div class="section-toolbar">
+        <div class="filter-tabs" id="filterTabs">
+          <button class="filter-tab active" data-filter="all">
+            <i class="fas fa-border-all"></i><span>Tất Cả</span>
+          </button>
+          <button class="filter-tab" data-filter="note">
+            <i class="fas fa-file-lines"></i><span>Ghi Chú</span>
+          </button>
+          <button class="filter-tab" data-filter="image">
+            <i class="fas fa-image"></i><span>Hình Ảnh</span>
+          </button>
+          <button class="filter-tab" data-filter="link">
+            <i class="fas fa-link"></i><span>Liên Kết</span>
+          </button>
+        </div>
+        <div class="item-count">
+          <span id="itemCountText">0 mục</span>
+        </div>
+      </div>
+
+      <div class="items-grid" id="itemsGrid"></div>
+
+      <div class="empty-state hidden" id="emptyState">
+        <div class="empty-icon">
+          <i class="fas fa-database"></i>
+        </div>
+        <h3>Chưa Có Dữ Liệu</h3>
+        <p>Nhấn nút <strong>+</strong> bên dưới để thêm ghi chú, hình ảnh hoặc liên kết</p>
+      </div>
+    </section>
+
+    <!-- Trash Section -->
+    <section id="trashSection" class="content-section hidden">
+      <div class="trash-toolbar">
+        <div class="trash-notice">
+          <i class="fas fa-circle-info"></i>
+          <span>Các mục sẽ bị xóa vĩnh viễn sau 30 ngày</span>
+        </div>
+        <button class="btn-danger-ghost" id="emptyTrashBtn">
+          <i class="fas fa-fire-flame-curved"></i> Xóa Tất Cả
+        </button>
+      </div>
+
+      <div class="items-grid" id="trashGrid"></div>
+
+      <div class="empty-state hidden" id="trashEmptyState">
+        <div class="empty-icon">
+          <i class="fas fa-trash-can"></i>
+        </div>
+        <h3>Thùng Rác Trống</h3>
+        <p>Không có mục nào trong thùng rác</p>
+      </div>
+    </section>
+
+  </div><!-- end .main-wrapper -->
+
+  <!-- FAB (Floating Action Button) -->
+  <div class="fab-container" id="fabContainer">
+    <div class="fab-options hidden" id="fabOptions">
+      <button class="fab-option" data-type="link" title="Thêm liên kết">
+        <span class="fab-option-label">Liên Kết</span>
+        <i class="fas fa-link"></i>
+      </button>
+      <button class="fab-option" data-type="image" title="Thêm hình ảnh">
+        <span class="fab-option-label">Hình Ảnh</span>
+        <i class="fas fa-image"></i>
+      </button>
+      <button class="fab-option" data-type="note" title="Thêm ghi chú">
+        <span class="fab-option-label">Ghi Chú</span>
+        <i class="fas fa-file-lines"></i>
+      </button>
+    </div>
+    <button class="fab-main" id="fabMain" title="Thêm mục mới">
+      <i class="fas fa-plus fab-icon"></i>
+    </button>
+  </div>
+
+  <!-- Calculator Widget -->
+  <div class="calc-widget hidden" id="calcWidget">
+    <div class="calc-header">
+      <div class="calc-title">
+        <i class="fas fa-microchip"></i> CALC-9000
+      </div>
+      <div class="calc-header-btns">
+        <button class="calc-header-btn" id="calcMinimize" title="Thu nhỏ"><i class="fas fa-minus"></i></button>
+        <button class="calc-header-btn" id="calcClose" title="Đóng"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="calc-screen">
+      <div class="calc-history" id="calcHistory"></div>
+      <div class="calc-display" id="calcDisplay">0</div>
+    </div>
+    <div class="calc-grid">
+      <!-- Hàng 1 -->
+      <button class="calc-btn func-btn" data-action="clear">AC</button>
+      <button class="calc-btn func-btn" data-action="sign">+/-</button>
+      <button class="calc-btn func-btn" data-action="percent">%</button>
+      <button class="calc-btn op-btn" data-action="divide">÷</button>
+      <!-- Hàng 2 -->
+      <button class="calc-btn num-btn" data-action="7">7</button>
+      <button class="calc-btn num-btn" data-action="8">8</button>
+      <button class="calc-btn num-btn" data-action="9">9</button>
+      <button class="calc-btn op-btn" data-action="multiply">×</button>
+      <!-- Hàng 3 -->
+      <button class="calc-btn num-btn" data-action="4">4</button>
+      <button class="calc-btn num-btn" data-action="5">5</button>
+      <button class="calc-btn num-btn" data-action="6">6</button>
+      <button class="calc-btn op-btn" data-action="subtract">−</button>
+      <!-- Hàng 4 -->
+      <button class="calc-btn num-btn" data-action="1">1</button>
+      <button class="calc-btn num-btn" data-action="2">2</button>
+      <button class="calc-btn num-btn" data-action="3">3</button>
+      <button class="calc-btn op-btn" data-action="add">+</button>
+      <!-- Hàng 5 -->
+      <button class="calc-btn num-btn zero-btn" data-action="0">0</button>
+      <button class="calc-btn num-btn" data-action="decimal">.</button>
+      <button class="calc-btn op-btn eq-btn" data-action="equals">=</button>
+    </div>
+  </div>
+
+</div><!-- end #app -->
+
+<!-- ===== MODAL THÊM MỤC ===== -->
+<div id="addItemModal" class="modal-overlay hidden">
+  <div class="modal-box" id="addItemModalBox">
+    <div class="modal-header">
+      <div class="modal-title-area">
+        <i class="fas fa-plus-circle modal-title-icon" id="modalTypeIcon"></i>
+        <h3 id="modalTitle">THÊM GHI CHÚ</h3>
+      </div>
+      <button class="modal-close-btn" id="modalCloseBtn"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Form ghi chú -->
+      <div id="noteForm" class="item-form hidden">
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-heading"></i> TIÊU ĐỀ</label>
+          <input type="text" id="noteTitle" class="form-input" placeholder="Nhập tiêu đề..." maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-align-left"></i> NỘI DUNG</label>
+          <textarea id="noteContent" class="form-textarea" placeholder="Nhập nội dung ghi chú..." rows="7"></textarea>
+        </div>
+      </div>
+
+      <!-- Form hình ảnh -->
+      <div id="imageForm" class="item-form hidden">
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-heading"></i> TÊN ẢNH</label>
+          <input type="text" id="imageTitle" class="form-input" placeholder="Nhập tên ảnh..." maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-cloud-arrow-up"></i> TẢI ẢNH LÊN</label>
+          <div class="file-drop-zone" id="fileDropZone">
+            <input type="file" id="imageFile" class="file-input-hidden" accept="image/*">
+            <div class="drop-zone-content" id="dropZoneContent">
+              <i class="fas fa-cloud-arrow-up drop-icon"></i>
+              <p class="drop-text">Kéo thả ảnh vào đây</p>
+              <p class="drop-subtext">hoặc <span class="browse-link">chọn từ máy tính</span></p>
+              <p class="drop-hint">PNG, JPG, GIF, WEBP — tối đa 20MB (tự động nén)</p>
+            </div>
+            <div class="image-preview-wrap hidden" id="imagePreviewWrap">
+              <img id="imagePreviewEl" alt="Preview" class="image-preview-img">
+              <button class="remove-preview-btn" id="removePreviewBtn">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form liên kết -->
+      <div id="linkForm" class="item-form hidden">
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-heading"></i> TÊN LIÊN KẾT</label>
+          <input type="text" id="linkTitle" class="form-input" placeholder="Tên hiển thị..." maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-link"></i> ĐỊA CHỈ URL</label>
+          <input type="url" id="linkUrl" class="form-input" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fas fa-align-left"></i> MÔ TẢ <span class="optional">(tùy chọn)</span></label>
+          <input type="text" id="linkDesc" class="form-input" placeholder="Mô tả ngắn về liên kết..." maxlength="200">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-ghost" id="modalCancelBtn"><i class="fas fa-times"></i> HỦY</button>
+      <button class="btn-primary" id="modalSaveBtn"><i class="fas fa-floppy-disk"></i> LƯU LẠI</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL XÁC NHẬN ===== -->
+<div id="confirmModal" class="modal-overlay hidden">
+  <div class="modal-box confirm-modal-box">
+    <div class="confirm-icon-wrap" id="confirmIconWrap">
+      <i class="fas fa-triangle-exclamation" id="confirmModalIcon"></i>
+    </div>
+    <h3 class="confirm-modal-title" id="confirmModalTitle">XÁC NHẬN</h3>
+    <p class="confirm-modal-msg" id="confirmModalMsg">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+    <div class="confirm-modal-actions">
+      <button class="btn-ghost" id="confirmCancelBtn">HỦY</button>
+      <button class="btn-danger" id="confirmOkBtn"><i class="fas fa-check"></i> XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- CryptoJS — Mã hóa AES phía client -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<!-- Firebase SDK (compat mode — không cần build tool) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script src="script.js"></script>
+</body>
+</html>

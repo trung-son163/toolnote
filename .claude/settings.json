@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check \"c:\\\\Users\\\\LENOVO\\\\Documents\\\\Deco\\\\TOOL\\\\script.js\")",
+      "Bash(ls -lh /mnt/c/Users/LENOVO/Documents/Deco/TOOL/)",
+      "Read(//mnt/c/Users/LENOVO/Documents/Deco/**)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\LENOVO\\\\Documents\\\\Deco\\\\TOOL\\\\\" | Where-Object { $_.Name -notmatch '^\\\\.' -and $_.Name -ne '.claude' } | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)"
+    ]
+  }
+}
