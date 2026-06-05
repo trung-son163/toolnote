@@ -462,6 +462,55 @@ body {
   text-align: center;
 }
 
+/* ── Khu vực "thiết bị mới" bên dưới form login ── */
+.new-device-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.new-device-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.new-device-divider::before,
+.new-device-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-bright);
+}
+
+.new-device-divider span {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  color: var(--text-dim);
+}
+
+/* ── Banner thông báo thiết bị mới ── */
+.new-device-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(191, 0, 255, 0.08);
+  border: 1px solid var(--purple-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--purple-dim);
+  line-height: 1.5;
+  width: 100%;
+  animation: fadeIn 0.3s ease;
+}
+
+.new-device-banner i { flex-shrink: 0; margin-top: 2px; color: var(--purple); }
+
 /* Thanh trạng thái khóa */
 .lock-status-bar {
   display: flex;

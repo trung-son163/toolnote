@@ -37,12 +37,12 @@
    ████████████████████████████████████████████████████████████ */
 
 const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyBNGSILHfHdAlYSIOf78AEvs3mvroHHRO4",
-  authDomain:        "tool-9ad60.firebaseapp.com",
-  projectId:         "tool-9ad60",
-  storageBucket:     "tool-9ad60.firebasestorage.app",
-  messagingSenderId: "456241740120",
-  appId:             "1:456241740120:web:fb3333d35082b9e2d88d2d"
+   apiKey: "AIzaSyD_iUztkprfq5Jr_BwNH9O3nA0VKjNUV2w",
+  authDomain: "tool-2aa87.firebaseapp.com",
+  projectId: "tool-2aa87",
+  storageBucket: "tool-2aa87.firebasestorage.app",
+  messagingSenderId: "640804467803",
+  appId: "1:640804467803:web:bcda1e60a8de5e12e83b7e"
 };
 
 /* Tự động phát hiện chế độ: Firebase hay LocalStorage */
@@ -232,12 +232,18 @@ async function attemptLogin(input) {
   }
 
   setLoginBusy(true);
-  await sleep(60); // Cho UI cập nhật trước khi chạy PBKDF2 đồng bộ
+  await sleep(60);
 
+  /* ── THIẾT BỊ MỚI: chưa có hash cục bộ, dùng Firebase để xác minh ── */
+  if (!isPasswordSet() && USE_FIREBASE && db) {
+    await attemptNewDeviceLogin(input);
+    return;
+  }
+
+  /* ── ĐĂNG NHẬP THÔNG THƯỜNG ── */
   const valid = await verifyPassword(input);
 
   if (valid) {
-    /* Phái sinh keys (PBKDF2 chạy ở đây, blocking ~50-100ms) */
     if (USE_FIREBASE) {
       state.userId = deriveUserId(input);
       state.encKey = deriveEncKey(input, state.userId);
@@ -259,6 +265,68 @@ async function attemptLogin(input) {
       showLoginError(`Sai mật khẩu. Còn ${MAX_ATTEMPTS - state.loginAttempts} lần thử.`);
     }
     if ($('loginPassword')) $('loginPassword').value = '';
+  }
+}
+
+/* Xác minh mật khẩu trên thiết bị mới bằng cách thử giải mã dữ liệu Firebase */
+async function attemptNewDeviceLogin(input) {
+  if (input.length < 4) {
+    setLoginBusy(false);
+    showLoginError('Mật khẩu phải có ít nhất 4 ký tự.');
+    return;
+  }
+
+  /* Phái sinh keys thử nghiệm */
+  const tryUserId = deriveUserId(input);
+  const tryEncKey = deriveEncKey(input, tryUserId);
+
+  try {
+    const colRef   = db.collection(FIRESTORE_COL).doc(tryUserId).collection('items');
+    const snapshot = await colRef.limit(3).get();
+
+    if (!snapshot.empty) {
+      /* Có dữ liệu trên cloud — thử giải mã để xác minh mật khẩu đúng */
+      let canDecrypt = false;
+      snapshot.docs.forEach(doc => {
+        const raw = doc.data();
+        if (raw.d) {
+          try {
+            const bytes = CryptoJS.AES.decrypt(raw.d, tryEncKey);
+            const json  = bytes.toString(CryptoJS.enc.Utf8);
+            if (json && JSON.parse(json)) canDecrypt = true;
+          } catch { /* sai key */ }
+        }
+      });
+
+      if (!canDecrypt) {
+        /* Sai mật khẩu — có dữ liệu nhưng không giải mã được */
+        setLoginBusy(false);
+        state.loginAttempts++;
+        resetLoginPin();
+        shakePinDisplay('loginPinDisplay');
+        showLoginError('Sai mật khẩu! Dữ liệu cloud không khớp.');
+        if ($('loginPassword')) $('loginPassword').value = '';
+        return;
+      }
+    }
+    /* Đúng mật khẩu (hoặc chưa có dữ liệu → kho mới) → lưu hash & mở khoá */
+    state.setupMode = 'password';
+    await setupPassword(input);
+    state.userId = tryUserId;
+    state.encKey = tryEncKey;
+    state.loginAttempts = 0;
+    hide($('loginError'));
+    doUnlock();
+
+  } catch (err) {
+    /* Lỗi mạng — cho đăng nhập offline, sẽ sync sau */
+    console.warn('[PSH] Firebase verify lỗi, đăng nhập offline:', err);
+    state.setupMode = 'password';
+    await setupPassword(input);
+    state.userId = tryUserId;
+    state.encKey = tryEncKey;
+    hide($('loginError'));
+    doUnlock();
   }
 }
 
@@ -927,27 +995,45 @@ function initLockScreen() {
   const hasPass  = isPasswordSet();
   const authMode = getAuthMode();
 
-  if (!hasPass) {
+  if (!hasPass && USE_FIREBASE) {
+    /* ── THIẾT BỊ MỚI + Firebase ──
+       Hiện Login thay vì Setup: người dùng nhập mật khẩu cũ để đồng bộ cloud */
+    $('lockSubtitle').textContent = 'NHẬP MẬT KHẨU ĐỂ ĐỒNG BỘ';
+    hide($('setupForm'));
+    show($('loginForm'));
+    show($('newDeviceActions'));
+    $('loginFormLabel').textContent = 'ĐĂNG NHẬP / THIẾT BỊ MỚI';
+    showLoginMode('password');
+
+    /* Banner hướng dẫn — chỉ chèn 1 lần */
+    if (!$('loginForm').querySelector('.new-device-banner')) {
+      const banner = document.createElement('div');
+      banner.className = 'new-device-banner';
+      banner.innerHTML = `<i class="fas fa-mobile-screen-button"></i>
+        <span>Thiết bị mới — nhập <strong>mật khẩu hiện tại</strong> để đồng bộ dữ liệu từ cloud. Chưa có tài khoản? Nhấn "Tạo kho mới".</span>`;
+      $('loginFormLabel').insertAdjacentElement('afterend', banner);
+    }
+
+    $('lockStatusText').textContent = 'NEW DEVICE';
+
+  } else if (!hasPass) {
+    /* ── LẦN ĐẦU, không Firebase ── */
     $('lockSubtitle').textContent = 'THIẾT LẬP LẦN ĐẦU';
     show($('setupForm'));
     hide($('loginForm'));
+    $('lockStatusText').textContent = 'SETUP REQUIRED';
 
-    /* Hiện ghi chú Firebase — chỉ chèn một lần, tránh trùng */
-    if (USE_FIREBASE && !$('setupForm').querySelector('.firebase-sync-note')) {
-      const note = document.createElement('div');
-      note.className = 'firebase-sync-note';
-      note.innerHTML = `<i class="fas fa-cloud"></i> <span>Firebase đã bật. Nếu có dữ liệu trên thiết bị khác, dùng <strong>cùng mật khẩu</strong> để đồng bộ tự động.</span>`;
-      $('setupForm').insertBefore(note, $('setupBtn'));
-    }
   } else {
+    /* ── ĐĂNG NHẬP BÌNH THƯỜNG ── */
     $('lockSubtitle').textContent = 'XÁC THỰC ĐỂ TRUY CẬP';
     hide($('setupForm'));
     show($('loginForm'));
+    hide($('newDeviceActions'));
     showLoginMode(authMode);
     $('loginFormLabel').textContent = authMode === 'pin' ? 'NHẬP PIN 6 SỐ' : 'NHẬP MẬT KHẨU';
+    $('lockStatusText').textContent = 'SYSTEM LOCKED';
   }
 
-  $('lockStatusText').textContent = hasPass ? 'SYSTEM LOCKED' : 'SETUP REQUIRED';
   setLoginBusy(false);
 }
 
@@ -1358,6 +1444,21 @@ function setupEvents() {
   $('switchToPinBtn').addEventListener('click', () => {
     if ($('loginPassword')) $('loginPassword').value = '';
     hide($('loginError')); showLoginMode('pin');
+  });
+
+  /* Nút "Tạo kho mới" trên form thiết bị mới */
+  $('goToSetupBtn').addEventListener('click', () => {
+    hide($('loginForm'));
+    show($('setupForm'));
+    show($('backToLoginBtn'));
+    $('lockSubtitle').textContent = 'TẠO MẬT KHẨU MỚI';
+    $('lockStatusText').textContent = 'SETUP';
+  });
+
+  /* Nút "Đã có mật khẩu" — quay lại login */
+  $('backToLoginBtn').addEventListener('click', () => {
+    hide($('setupForm'));
+    initLockScreen(); // Khởi lại để hiện đúng trạng thái
   });
 
   document.querySelectorAll('.toggle-pw-btn').forEach(btn =>

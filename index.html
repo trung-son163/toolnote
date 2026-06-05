@@ -90,6 +90,11 @@
         <i class="fas fa-rocket"></i> KHỞI TẠO HỆ THỐNG
       </button>
       <p id="setupError" class="lock-error hidden"></p>
+
+      <!-- Nút quay lại login (hiện khi đến từ loginForm) -->
+      <button id="backToLoginBtn" class="lock-toggle-btn hidden">
+        <i class="fas fa-arrow-left"></i> Đã có mật khẩu? Đăng nhập
+      </button>
     </div>
 
     <!-- Form đăng nhập -->
@@ -138,7 +143,14 @@
       </div>
 
       <p id="loginError" class="lock-error hidden"></p>
-      <p id="attemptsWarning" class="lock-warning hidden"></p>
+
+      <!-- Hiện khi thiết bị mới chưa có mật khẩu cục bộ (Firebase mode) -->
+      <div id="newDeviceActions" class="new-device-actions hidden">
+        <div class="new-device-divider"><span>HOẶC</span></div>
+        <button id="goToSetupBtn" class="lock-toggle-btn">
+          <i class="fas fa-plus-circle"></i> Tạo kho mới
+        </button>
+      </div>
     </div>
 
     <div class="lock-status-bar">
