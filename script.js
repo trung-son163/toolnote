@@ -424,6 +424,13 @@ function subscribeToCloud() {
       });
 
       if (changed) {
+        /* Dedup phòng ngừa: loại bỏ item trùng id trước khi render */
+        const seen = new Set();
+        state.items = state.items.filter(item => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
         saveLocalCache();
         renderAll();
       }
@@ -876,79 +883,90 @@ function closeAddModal() {
   $('modalTypeIcon').style.filter = '';
 }
 
+/* Guard chống gọi saveItem 2 lần liên tiếp (double-click hoặc Enter+Click) */
+let _isSaving = false;
+
 async function saveItem() {
-  const type = state.pendingItemType;
-  let title, content, description, fileName;
+  if (_isSaving) return;
+  _isSaving = true;
 
-  if (type === 'note') {
-    title   = $('noteTitle').value.trim();
-    content = $('noteContent').value.trim();
-    if (!title)   { shakeEl($('noteTitle'));   showToast('Nhập tiêu đề!', 'warning'); return; }
-    if (!content) { shakeEl($('noteContent')); showToast('Nhập nội dung!', 'warning'); return; }
-
-  } else if (type === 'image') {
-    title    = $('imageTitle').value.trim();
-    if (!title)             { shakeEl($('imageTitle')); showToast('Nhập tên ảnh!', 'warning'); return; }
-    if (!state.imageBase64) { showToast('Chọn một ảnh!', 'warning'); return; }
-    content  = state.imageBase64;
-    fileName = state.imageFileName;
-
-  } else if (type === 'link') {
-    title       = $('linkTitle').value.trim();
-    content     = $('linkUrl').value.trim();
-    description = $('linkDesc').value.trim();
-    if (!title)               { shakeEl($('linkTitle')); showToast('Nhập tên liên kết!', 'warning'); return; }
-    if (!content)             { shakeEl($('linkUrl'));   showToast('Nhập địa chỉ URL!', 'warning'); return; }
-    if (!isValidUrl(content)) { shakeEl($('linkUrl'));   showToast('URL không hợp lệ! Cần bắt đầu bằng http:// hoặc https://', 'warning'); return; }
-  }
-
-  /* ── CHẾ ĐỘ SỬA: cập nhật item đang có ── */
-  if (state.editingItemId) {
-    const idx = state.items.findIndex(i => i.id === state.editingItemId);
-    if (idx === -1) { closeAddModal(); return; }
-
-    const existing = state.items[idx];
-    existing.title       = title;
-    existing.updatedAt   = Date.now();
+  try {
+    const type = state.pendingItemType;
+    let title, content, description, fileName;
 
     if (type === 'note') {
-      existing.content = content;
+      title   = $('noteTitle').value.trim();
+      content = $('noteContent').value.trim();
+      if (!title)   { shakeEl($('noteTitle'));   showToast('Nhập tiêu đề!', 'warning'); return; }
+      if (!content) { shakeEl($('noteContent')); showToast('Nhập nội dung!', 'warning'); return; }
+
     } else if (type === 'image') {
-      // Chỉ cập nhật ảnh nếu người dùng chọn ảnh mới
-      if (state.imageBase64 && state.imageBase64 !== existing.content) {
-        existing.content  = state.imageBase64;
-        existing.fileName = state.imageFileName || existing.fileName;
-      }
+      title    = $('imageTitle').value.trim();
+      if (!title)             { shakeEl($('imageTitle')); showToast('Nhập tên ảnh!', 'warning'); return; }
+      if (!state.imageBase64) { showToast('Chọn một ảnh!', 'warning'); return; }
+      content  = state.imageBase64;
+      fileName = state.imageFileName;
+
     } else if (type === 'link') {
-      existing.content     = content;
-      existing.description = description || '';
+      title       = $('linkTitle').value.trim();
+      content     = $('linkUrl').value.trim();
+      description = $('linkDesc').value.trim();
+      if (!title)               { shakeEl($('linkTitle')); showToast('Nhập tên liên kết!', 'warning'); return; }
+      if (!content)             { shakeEl($('linkUrl'));   showToast('Nhập địa chỉ URL!', 'warning'); return; }
+      if (!isValidUrl(content)) { shakeEl($('linkUrl'));   showToast('URL không hợp lệ! Cần bắt đầu bằng http:// hoặc https://', 'warning'); return; }
     }
 
+    /* ── CHẾ ĐỘ SỬA ── */
+    if (state.editingItemId) {
+      const idx = state.items.findIndex(i => i.id === state.editingItemId);
+      if (idx === -1) { closeAddModal(); return; }
+
+      const existing    = state.items[idx];
+      existing.title    = title;
+      existing.updatedAt = Date.now();
+
+      if (type === 'note') {
+        existing.content = content;
+      } else if (type === 'image') {
+        if (state.imageBase64 && state.imageBase64 !== existing.content) {
+          existing.content  = state.imageBase64;
+          existing.fileName = state.imageFileName || existing.fileName;
+        }
+      } else if (type === 'link') {
+        existing.content     = content;
+        existing.description = description || '';
+      }
+
+      closeAddModal();
+      persistItem(existing);
+      showToast(`Đã cập nhật "${title}"!`, 'success');
+      return;
+    }
+
+    /* ── CHẾ ĐỘ THÊM MỚI ── */
+    const newItem = {
+      id:          generateId(),
+      type,
+      title,
+      content,
+      description: description || '',
+      fileName:    fileName || '',
+      createdAt:   Date.now(),
+      updatedAt:   Date.now(),
+      inTrash:     false,
+      trashedAt:   null,
+    };
+
+    state.items.unshift(newItem);
     closeAddModal();
-    persistItem(existing);
-    showToast(`Đã cập nhật "${title}"!`, 'success');
-    return;
+    persistItem(newItem);
+    if (state.currentSection !== 'dashboard') switchSection('dashboard');
+    showToast(`Đã thêm "${title}"!`, 'success');
+
+  } finally {
+    /* Luôn reset flag dù thành công, validation fail hay lỗi bất ngờ */
+    _isSaving = false;
   }
-
-  /* ── CHẾ ĐỘ THÊM MỚI ── */
-  const newItem = {
-    id:          generateId(),
-    type,
-    title,
-    content,
-    description: description || '',
-    fileName:    fileName || '',
-    createdAt:   Date.now(),
-    updatedAt:   Date.now(),
-    inTrash:     false,
-    trashedAt:   null,
-  };
-
-  state.items.unshift(newItem);
-  closeAddModal();
-  persistItem(newItem);
-  if (state.currentSection !== 'dashboard') switchSection('dashboard');
-  showToast(`Đã thêm "${title}"!`, 'success');
 }
 
 /* ============================================================
@@ -1665,7 +1683,12 @@ function setupEvents() {
   $('modalSaveBtn').addEventListener('click', saveItem);
   $('addItemModal').addEventListener('click', e => { if (e.target === $('addItemModal')) closeAddModal(); });
   $('addItemModal').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); saveItem(); }
+    if (e.key !== 'Enter') return;
+    if (e.target.tagName === 'TEXTAREA') return;
+    /* Nếu focus đang ở nút Save, sự kiện click sẽ tự gọi saveItem — bỏ qua */
+    if (e.target.id === 'modalSaveBtn' || e.target.closest('#modalSaveBtn')) return;
+    e.preventDefault();
+    saveItem();
   });
 
   /* ── FILE UPLOAD ── */
