@@ -366,6 +366,7 @@ function lockApp() {
 
   stopAutoLock();
   updateSyncStatus('local');
+  document.body.classList.remove('calc-open');
   $('app').classList.add('hidden');
 
   const ls = $('lockScreen');
@@ -1170,6 +1171,8 @@ function tickAutoLock() {
 function toggleCalc() {
   state.calcVisible = !state.calcVisible;
   $('calcWidget').classList.toggle('hidden', !state.calcVisible);
+  /* Thêm class calc-open vào body để ẩn FAB khi máy tính mở trên mobile */
+  document.body.classList.toggle('calc-open', state.calcVisible);
 }
 
 function handleCalcInput(action) {
@@ -1530,8 +1533,8 @@ function setupEvents() {
 
   /* ── CALCULATOR ── */
   $('calcToggleBtn').addEventListener('click', toggleCalc);
-  $('calcClose').addEventListener('click',    () => { state.calcVisible = false; $('calcWidget').classList.add('hidden'); });
-  $('calcMinimize').addEventListener('click', () => { state.calcVisible = false; $('calcWidget').classList.add('hidden'); });
+  $('calcClose').addEventListener('click',    () => { state.calcVisible = false; $('calcWidget').classList.add('hidden'); document.body.classList.remove('calc-open'); });
+  $('calcMinimize').addEventListener('click', () => { state.calcVisible = false; $('calcWidget').classList.add('hidden'); document.body.classList.remove('calc-open'); });
   document.querySelectorAll('.calc-btn').forEach(btn =>
     btn.addEventListener('click', () => handleCalcInput(btn.dataset.action))
   );

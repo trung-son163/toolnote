@@ -1468,6 +1468,11 @@ body {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes calcSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
 .calc-header {
   display: flex;
   align-items: center;
@@ -2036,57 +2041,204 @@ The app will display SYNC... → SYNCED in the header indicator when Firebase is
 .toast.warning i { color: var(--orange); }
 
 /* ============================================================
-   RESPONSIVE — MOBILE
+   RESPONSIVE — TABLET (≤ 768px)
    ============================================================ */
 @media (max-width: 768px) {
+
+  /* ── Sidebar: drawer từ trái ── */
   .sidebar {
     position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    left: 0; top: 0; bottom: 0;
     transform: translateX(-100%);
     z-index: 200;
     width: var(--sidebar-w) !important;
+    transition: transform 0.3s var(--ease-cyber);
   }
-
-  .sidebar.mobile-open { transform: translateX(0); }
-  .sidebar-overlay { display: flex !important; }
+  .sidebar.mobile-open  { transform: translateX(0); box-shadow: 8px 0 32px rgba(0,0,0,0.6); }
+  .sidebar-overlay      { display: flex !important; }
   .sidebar-overlay.hidden { display: none !important; }
-
-  .hamburger-btn { display: flex; }
+  .hamburger-btn        { display: flex; }
   .sidebar-collapse-btn { display: none; }
 
-  .section-breadcrumb h2 { font-size: 0.75rem; }
-  .header-center { display: none; }
+  /* ── Header ── */
+  .top-header       { padding: 0 12px; gap: 8px; }
+  .header-center    { display: none; }           /* ẩn search bar, dùng filter */
+  .auto-lock-display { display: none; }          /* ẩn đồng hồ */
+  .section-breadcrumb h2 { font-size: 0.72rem; letter-spacing: 0.08em; }
 
-  .items-grid { grid-template-columns: 1fr; }
-
-  .calc-widget {
-    right: 50%;
-    transform: translateX(50%);
-    bottom: 90px;
-    width: calc(100vw - 32px);
+  /* ── Grid cards: 1 cột ── */
+  .items-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
-  .fab-container { bottom: 16px; right: 16px; }
+  /* ── Content padding nhỏ hơn ── */
+  .content-section { padding: 12px 12px 100px; } /* padding-bottom tránh FAB */
 
-  .modal-overlay { padding: 12px; align-items: flex-end; }
-  .modal-box { max-height: 85vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-
-  .confirm-modal-box { max-width: 100%; border-radius: var(--radius-lg); }
-
-  .filter-tabs { gap: 4px; }
+  /* ── Filter tabs: cuộn ngang, ẩn text ── */
+  .filter-tabs {
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .filter-tab { padding: 7px 12px; flex-shrink: 0; }
   .filter-tab span { display: none; }
 
-  .lock-title { font-size: 0.85rem; }
-  .pin-pad { max-width: 240px; }
-  .pin-key { padding: 14px; }
+  /* ── Cards: touch target to hơn ── */
+  .card-body        { padding: 14px; }
+  .card-footer      { padding: 10px 14px; }
+  .dropdown-item    { padding: 14px 16px; font-size: 0.9rem; min-height: 48px; }
+  .card-menu-btn    { width: 34px; height: 34px; }
+  .card-note-content { -webkit-line-clamp: 3; line-clamp: 3; }
+
+  /* ── FAB ── */
+  .fab-container    { bottom: 20px; right: 16px; }
+  .fab-main         { width: 52px; height: 52px; }
+
+  /* Ẩn FAB khi máy tính đang mở trên mobile */
+  body.calc-open .fab-container { opacity: 0; pointer-events: none; }
+
+  /* ── MÁY TÍNH: bottom sheet toàn chiều rộng ── */
+  .calc-widget {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    transform: none !important;
+    animation: calcSlideUp 0.3s var(--ease-out-expo);
+    padding-top: 4px;
+  }
+
+  /* Handle kéo */
+  .calc-widget::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-bright);
+    border-radius: 2px;
+    margin: 6px auto 2px;
+  }
+
+  .calc-screen {
+    padding: 12px 18px 8px;
+    min-height: 76px;
+  }
+  .calc-display { font-size: 2.4rem; }
+  .calc-history { font-size: 0.75rem; }
+
+  /* Buttons lớn hơn để dễ bấm */
+  .calc-btn     { padding: 22px 8px; font-size: 1.1rem; }
+  .func-btn     { font-size: 0.85rem; }
+
+  /* Nút header máy tính to hơn */
+  .calc-header-btn { width: 32px; height: 32px; font-size: 0.85rem; }
+
+  /* ── Modals: bottom sheet ── */
+  .modal-overlay  { padding: 0; align-items: flex-end; }
+  .modal-box      {
+    max-height: 92vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    width: 100%;
+    max-width: 100%;
+  }
+  .confirm-modal-box {
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 32px 24px 28px;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  /* Form inputs to hơn để dễ nhập trên mobile */
+  .form-input, .form-textarea {
+    font-size: 1rem;       /* tránh iOS auto-zoom khi focus */
+    padding: 13px 14px;
+  }
+
+  /* ── Toast: wrap text thay vì nowrap ── */
+  .toast-container {
+    bottom: 80px;          /* tránh FAB */
+    left: 12px;
+    right: 12px;
+    transform: none;
+    align-items: stretch;
+  }
+  .toast { white-space: normal; font-size: 0.82rem; }
+
+  /* ── Lock screen ── */
+  .lock-container { gap: 16px; padding: 14px; }
+  .lock-form      { padding: 22px 16px; gap: 12px; }
+  .lock-logo-icon { width: 58px; height: 58px; }
+  .lock-title     { font-size: 0.82rem; letter-spacing: 0.14em; }
+
+  /* PIN pad to hơn để dễ bấm */
+  .pin-pad { max-width: 264px; gap: 10px; }
+  .pin-key { padding: 18px 14px; font-size: 1.05rem; border-radius: var(--radius-md); }
 }
 
-@media (max-width: 480px) {
-  .top-header { padding: 0 10px; gap: 8px; }
-  .content-section { padding: 12px; }
-  .auto-lock-display { display: none; }
+/* ============================================================
+   RESPONSIVE — MOBILE NHỎ (≤ 430px — iPhone 14, Android)
+   ============================================================ */
+@media (max-width: 430px) {
+  .top-header { padding: 0 10px; gap: 6px; }
+
+  /* Ẩn text breadcrumb, giữ icon */
+  .section-breadcrumb h2 { display: none; }
+
+  /* Grid giữ nguyên 1 cột */
+  .content-section { padding: 10px 10px 100px; }
+
+  /* Calculator buttons tối ưu cho màn nhỏ */
+  .calc-btn  { padding: 19px 4px; font-size: 1rem; }
+  .func-btn  { font-size: 0.78rem; }
+  .calc-display { font-size: 2rem; }
+
+  /* FAB nhỏ hơn 1 chút */
+  .fab-main  { width: 48px; height: 48px; font-size: 1rem; }
+  .fab-container { bottom: 16px; right: 14px; }
+
+  /* Lock screen compact */
+  .lock-form  { padding: 18px 14px; }
+  .pin-pad    { max-width: 240px; gap: 8px; }
+  .pin-key    { padding: 15px 10px; }
+  .lock-logo-icon { width: 50px; height: 50px; }
+
+  /* Toast tránh FAB */
+  .toast-container { bottom: 76px; }
+
+  /* Modal inputs phòng iOS zoom */
+  .form-input, .form-textarea { font-size: 16px; }
+
+  /* Trash actions stack dọc trên màn rất nhỏ */
+  .trash-card-actions { flex-wrap: wrap; gap: 6px; }
+  .btn-restore, .btn-perm-delete { flex: 1; justify-content: center; min-width: 0; }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE RẤT NHỎ (≤ 360px — Android cũ)
+   ============================================================ */
+@media (max-width: 360px) {
+  .pin-pad    { max-width: 220px; gap: 6px; }
+  .pin-key    { padding: 13px 8px; font-size: 0.95rem; }
+  .calc-btn   { padding: 16px 3px; font-size: 0.9rem; }
+  .lock-title { font-size: 0.72rem; }
+  .filter-tab { padding: 6px 10px; }
+  .calc-display { font-size: 1.7rem; }
 }
 
 /* ============================================================
