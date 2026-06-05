@@ -582,41 +582,85 @@ function emptyTrash() {
   );
 }
 
+/* Kiểm tra thiết bị iOS (Safari không hỗ trợ download attribute với data: URL) */
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/* Chuyển đổi data: URL → Blob (bắt buộc để download hoạt động trên mobile) */
+function dataUrlToBlob(dataUrl) {
+  const parts  = dataUrl.split(',');
+  const mime   = parts[0].match(/:(.*?);/)[1];
+  const binary = atob(parts[1]);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 function downloadItem(id) {
   const item = state.items.find(i => i.id === id);
   if (!item) return;
 
   if (item.content === '[cached]') {
-    showToast('Ảnh chỉ có trong cloud. Cần kết nối mạng để tải.', 'warning');
+    showToast('Ảnh chỉ có trong cloud — cần mạng để tải xuống.', 'warning');
     return;
   }
 
-  let url, fileName;
-  if (item.type === 'note') {
-    url = URL.createObjectURL(new Blob(
-      [`${item.title}\n${'─'.repeat(40)}\n\n${item.content}`],
-      { type: 'text/plain;charset=utf-8' }
-    ));
-    fileName = slugify(item.title) + '.txt';
-  } else if (item.type === 'image') {
-    url = item.content;
-    fileName = item.fileName || slugify(item.title) + '.jpg';
-  } else {
-    url = URL.createObjectURL(new Blob(
-      [`Tiêu đề: ${item.title}\nURL: ${item.content}${item.description ? '\nMô tả: ' + item.description : ''}`],
-      { type: 'text/plain;charset=utf-8' }
-    ));
-    fileName = slugify(item.title) + '.txt';
-  }
+  try {
+    let blob, fileName;
 
-  const a = Object.assign(document.createElement('a'), {
-    href: url, download: fileName, style: 'display:none'
-  });
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  if (item.type !== 'image') URL.revokeObjectURL(url);
-  showToast(`Đang tải "${item.title}"...`, 'info');
+    if (item.type === 'note') {
+      blob     = new Blob(
+        [`${item.title}\n${'─'.repeat(40)}\n\n${item.content}`],
+        { type: 'text/plain;charset=utf-8' }
+      );
+      fileName = slugify(item.title) + '.txt';
+
+    } else if (item.type === 'image') {
+      /* QUAN TRỌNG: Phải chuyển data: URL → Blob để iOS Safari tải được */
+      blob     = dataUrlToBlob(item.content);
+      fileName = item.fileName || slugify(item.title) + '.jpg';
+
+    } else {
+      const text = [
+        `Tiêu đề : ${item.title}`,
+        `URL      : ${item.content}`,
+        item.description ? `Mô tả    : ${item.description}` : '',
+      ].filter(Boolean).join('\n');
+      blob     = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      fileName = slugify(item.title) + '.txt';
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+
+    if (isIOS()) {
+      /* iOS Safari: mở tab mới — người dùng nhấn giữ → "Save to Files" */
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        /* Popup bị chặn — fallback: thay đổi location */
+        location.href = blobUrl;
+      }
+      showToast('iOS: Nhấn giữ ảnh/văn bản → "Lưu vào Files" để tải về.', 'info');
+    } else {
+      /* Android / Desktop: anchor click bình thường */
+      const a = document.createElement('a');
+      a.href     = blobUrl;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`Đang tải xuống "${item.title}"...`, 'success');
+    }
+
+    /* Revoke sau 60 giây — đủ thời gian browser xử lý download */
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+  } catch (err) {
+    console.error('[PSH] Download error:', err);
+    showToast('Tải xuống thất bại. Vui lòng thử lại!', 'error');
+  }
 }
 
 /* ============================================================
