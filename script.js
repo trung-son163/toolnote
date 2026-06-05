@@ -607,6 +607,22 @@ async function downloadItem(id) {
     return;
   }
 
+  /* ── iOS: xử lý riêng hoàn toàn miễn phí, không cần iCloud ── */
+  if (isIOS()) {
+    if (item.type === 'image') {
+      /* Hiện ảnh toàn màn hình → người dùng nhấn giữ → "Lưu vào Ảnh" (Photos, miễn phí) */
+      showImageViewer(item);
+    } else {
+      /* Ghi chú / Link: copy vào clipboard — miễn phí, không cần lưu file */
+      const text = item.type === 'note'
+        ? `${item.title}\n${'─'.repeat(40)}\n\n${item.content}`
+        : `${item.title}\n${item.content}${item.description ? '\n' + item.description : ''}`;
+      await copyToClipboard(text, item.title);
+    }
+    return;
+  }
+
+  /* ── Android / Desktop: download file bình thường ── */
   try {
     let blob, fileName;
 
@@ -631,45 +647,89 @@ async function downloadItem(id) {
       fileName = slugify(item.title) + '.txt';
     }
 
-    /* ── ƯU TIÊN 1: Web Share API (iOS 15+, Android Chrome) ──
-       Hiện bảng native: "Lưu Ảnh", "Lưu vào Files", AirDrop...
-       Phải gọi trong cùng user-gesture (click), nên không được await trước đây */
-    if (navigator.canShare) {
-      const shareFile = new File([blob], fileName, { type: blob.type });
-      if (navigator.canShare({ files: [shareFile] })) {
-        await navigator.share({ files: [shareFile], title: item.title });
-        /* Nếu tới đây = user đã chia sẻ thành công (hoặc đóng sheet) */
-        return;
-      }
-    }
-
-    /* ── ƯU TIÊN 2: Anchor download (Android, Desktop) ── */
     const blobUrl = URL.createObjectURL(blob);
-
-    if (isIOS()) {
-      /* iOS không hỗ trợ Share API với loại file này → mở tab */
-      const win = window.open(blobUrl, '_blank');
-      if (!win) location.href = blobUrl;
-      showToast('Nhấn giữ nội dung → "Lưu vào Files".', 'info');
-    } else {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      showToast(`Đang tải "${item.title}"...`, 'success');
-    }
-
+    const a       = document.createElement('a');
+    a.href         = blobUrl;
+    a.download     = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    showToast(`Đang tải "${item.title}"...`, 'success');
 
   } catch (err) {
-    /* AbortError = người dùng tự đóng share sheet → không phải lỗi */
-    if (err.name === 'AbortError') return;
     console.error('[PSH] Download error:', err);
     showToast('Tải xuống thất bại. Vui lòng thử lại!', 'error');
   }
+}
+
+/* Copy text vào clipboard — fallback nếu API không có */
+async function copyToClipboard(text, title) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      showToast(`✓ Đã copy "${title}" vào clipboard!`, 'success');
+    } else {
+      /* Fallback cũ: execCommand (deprecated nhưng vẫn chạy trên Safari cũ) */
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(`✓ Đã copy "${title}" vào clipboard!`, 'success');
+    }
+  } catch {
+    showToast('Không copy được — hãy chọn và copy thủ công.', 'warning');
+  }
+}
+
+/* Hiện ảnh toàn màn hình để người dùng nhấn giữ → Lưu vào Ảnh (iOS Photos) */
+function showImageViewer(item) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:99999;
+    background:rgba(0,0,0,0.95);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;
+    padding:20px;
+  `;
+
+  const hint = document.createElement('p');
+  hint.style.cssText = `
+    font-family:'Rajdhani',sans-serif;font-size:0.9rem;font-weight:600;
+    color:rgba(255,255,255,0.7);text-align:center;letter-spacing:0.05em;
+    margin:0;
+  `;
+  hint.textContent = '👇 Nhấn GIỮ vào ảnh → chọn "Lưu vào Ảnh"';
+
+  const img = document.createElement('img');
+  img.src   = item.content;
+  img.style.cssText = `
+    max-width:100%;max-height:75vh;
+    object-fit:contain;border-radius:8px;
+    -webkit-touch-callout:default;   /* bật menu nhấn giữ trên iOS */
+    touch-action:none;
+  `;
+  img.alt = item.title;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText = `
+    padding:10px 28px;
+    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);
+    border-radius:8px;color:#fff;font-size:0.9rem;font-weight:600;
+    cursor:pointer;letter-spacing:0.08em;
+  `;
+  closeBtn.textContent = '✕  ĐÓNG';
+  closeBtn.onclick = () => overlay.remove();
+
+  overlay.append(hint, img, closeBtn);
+  document.body.appendChild(overlay);
+
+  /* Đóng khi tap vào nền */
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 /* ============================================================
