@@ -1243,6 +1243,39 @@ body {
   letter-spacing: 0.06em;
 }
 
+.card-file-hint {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--cyan-dim);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
+.card-file-clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.18s;
+  margin: -4px;
+  padding: 4px;
+}
+
+.card-file-clickable:hover {
+  background: rgba(0, 245, 255, 0.07);
+}
+
+.card-file-clickable:hover .card-file-hint {
+  opacity: 1;
+  color: var(--cyan);
+}
+
+.card-file-clickable:active {
+  background: rgba(0, 245, 255, 0.13);
+}
+
 /* ── Doc selected (trong modal) ── */
 .doc-selected-wrap {
   display: flex;

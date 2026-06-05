@@ -706,50 +706,246 @@ async function copyToClipboard(text, title) {
   }
 }
 
-/* Hiện ảnh toàn màn hình để người dùng nhấn giữ → Lưu vào Ảnh (iOS Photos) */
-function showImageViewer(item) {
+/* ============================================================
+   VIEWER — Mở file trực tiếp trong app
+   ============================================================ */
+
+/* Tạo overlay chung cho tất cả viewer */
+function createViewerOverlay(title, fileName, onCleanup) {
+  const info = getFileIconInfo('', fileName || title);
   const overlay = document.createElement('div');
+  overlay.className = 'file-viewer-overlay';
   overlay.style.cssText = `
     position:fixed;inset:0;z-index:99999;
-    background:rgba(0,0,0,0.95);
+    background:rgba(4,4,12,0.97);
     display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:16px;
-    padding:20px;
+    animation:fadeIn 0.2s ease;
   `;
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+      padding:10px 16px;background:var(--bg-elevated,#141428);
+      border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;min-height:50px;">
+      <div style="display:flex;align-items:center;gap:10px;overflow:hidden;flex:1;min-width:0;">
+        <i class="fas ${info.icon}" style="color:${info.color};font-size:1.1rem;flex-shrink:0;"></i>
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.95rem;
+          color:#dde6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${escHtml(fileName || title)}
+        </span>
+      </div>
+      <button class="viewer-close" style="margin-left:12px;flex-shrink:0;
+        padding:7px 14px;background:none;border:1px solid rgba(255,255,255,0.18);
+        border-radius:6px;color:#7a8ab0;cursor:pointer;font-size:0.82rem;
+        font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.08em;
+        display:flex;align-items:center;gap:6px;">
+        <i class="fas fa-times"></i> ĐÓNG
+      </button>
+    </div>
+    <div class="viewer-body" style="flex:1;overflow:hidden;position:relative;"></div>`;
 
-  const hint = document.createElement('p');
-  hint.style.cssText = `
-    font-family:'Rajdhani',sans-serif;font-size:0.9rem;font-weight:600;
-    color:rgba(255,255,255,0.7);text-align:center;letter-spacing:0.05em;
-    margin:0;
-  `;
-  hint.textContent = '👇 Nhấn GIỮ vào ảnh → chọn "Lưu vào Ảnh"';
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', escHandler);
+    if (onCleanup) onCleanup();
+  };
+  overlay.querySelector('.viewer-close').addEventListener('click', close);
+  const escHandler = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', escHandler);
+  return overlay;
+}
+
+/* Router chính: chọn viewer phù hợp theo loại file */
+function openItemViewer(item) {
+  if (!item) return;
+
+  /* Ảnh */
+  if (item.type === 'image') { showImageViewer(item); return; }
+
+  /* Note: hiện full text */
+  if (item.type === 'note') { showNoteViewer(item); return; }
+
+  /* Link: mở tab mới */
+  if (item.type === 'link') {
+    window.open(sanitizeUrl(item.content), '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  /* File */
+  if (item.type === 'file') {
+    if (!item.content || item.content === '[cached]') {
+      showToast('File chưa cache cục bộ — cần mạng để xem.', 'warning');
+      return;
+    }
+    const [mime = ''] = (item.description || '').split('|');
+    const ext = (item.fileName || '').split('.').pop().toLowerCase();
+
+    if (mime.includes('pdf') || ext === 'pdf') {
+      showPdfViewer(item); return;
+    }
+    if (mime.startsWith('text/') || ['txt','csv','md','json','log','xml','html'].includes(ext)) {
+      showTextFileViewer(item); return;
+    }
+    if (mime.startsWith('audio/') || ['mp3','wav','ogg','aac','m4a','flac'].includes(ext)) {
+      showAudioViewer(item); return;
+    }
+    if (mime.startsWith('video/') || ['mp4','webm','mov','mkv'].includes(ext)) {
+      showVideoViewer(item); return;
+    }
+    /* Word, Excel, ZIP... — browser không render được → hỏi có muốn tải không */
+    showConfirm(
+      'KHÔNG THỂ XEM TRỰC TIẾP',
+      `Trình duyệt không hỗ trợ xem loại file này.<br>Tải xuống <strong>"${escHtml(item.title)}"</strong>?`,
+      () => downloadItem(item.id)
+    );
+  }
+}
+
+/* Viewer ảnh — toàn màn hình */
+function showImageViewer(item) {
+  const overlay = createViewerOverlay(item.title, item.fileName || item.title, null);
+  const body    = overlay.querySelector('.viewer-body');
+  const isOnIOS = isIOS();
+
+  body.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;';
 
   const img = document.createElement('img');
   img.src   = item.content;
-  img.style.cssText = `
-    max-width:100%;max-height:75vh;
+  img.style.cssText = `max-width:100%;max-height:calc(100vh - 120px);
     object-fit:contain;border-radius:8px;
-    -webkit-touch-callout:default;   /* bật menu nhấn giữ trên iOS */
-    touch-action:none;
-  `;
+    -webkit-touch-callout:${isOnIOS ? 'default' : 'none'};`;
   img.alt = item.title;
 
-  const closeBtn = document.createElement('button');
-  closeBtn.style.cssText = `
-    padding:10px 28px;
-    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);
-    border-radius:8px;color:#fff;font-size:0.9rem;font-weight:600;
-    cursor:pointer;letter-spacing:0.08em;
-  `;
-  closeBtn.textContent = '✕  ĐÓNG';
-  closeBtn.onclick = () => overlay.remove();
+  if (isOnIOS) {
+    const hint = document.createElement('p');
+    hint.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:0.85rem;color:rgba(255,255,255,0.5);margin:0;text-align:center;';
+    hint.textContent = '👇 Nhấn GIỮ vào ảnh → "Lưu vào Ảnh"';
+    body.append(hint, img);
+  } else {
+    body.append(img);
+  }
 
-  overlay.append(hint, img, closeBtn);
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay || e.target === body) overlay.remove(); });
+}
 
-  /* Đóng khi tap vào nền */
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+/* Viewer ghi chú — đọc toàn văn */
+function showNoteViewer(item) {
+  const overlay = createViewerOverlay(item.title, item.title, null);
+  const body    = overlay.querySelector('.viewer-body');
+  body.style.cssText = 'overflow-y:auto;padding:24px;';
+  body.innerHTML = `
+    <div style="max-width:720px;margin:0 auto;">
+      <h2 style="font-family:'Orbitron',sans-serif;font-size:1rem;color:#00f5ff;
+        letter-spacing:0.12em;margin-bottom:20px;padding-bottom:12px;
+        border-bottom:1px solid rgba(0,245,255,0.2);">${escHtml(item.title)}</h2>
+      <pre style="font-family:'Rajdhani',sans-serif;font-size:0.95rem;line-height:1.7;
+        color:#dde6ff;white-space:pre-wrap;word-break:break-word;margin:0;">${escHtml(item.content)}</pre>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+/* Viewer PDF — iframe */
+function showPdfViewer(item) {
+  let blobUrl;
+  const cleanup = () => blobUrl && URL.revokeObjectURL(blobUrl);
+  const overlay = createViewerOverlay(item.title, item.fileName, cleanup);
+  const body    = overlay.querySelector('.viewer-body');
+
+  try {
+    blobUrl = URL.createObjectURL(dataUrlToBlob(item.content));
+    const embed = document.createElement('iframe');
+    embed.src   = blobUrl + '#toolbar=1';
+    embed.style.cssText = 'width:100%;height:100%;border:none;';
+    embed.title = item.title;
+    body.appendChild(embed);
+
+    /* Fallback nếu iframe không render được PDF */
+    embed.onerror = () => {
+      body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;
+        justify-content:center;height:100%;gap:16px;color:#7a8ab0;">
+        <i class="fas fa-file-pdf" style="font-size:3rem;color:#ff453a;"></i>
+        <p style="font-family:Rajdhani,sans-serif;">Trình duyệt không hỗ trợ xem PDF nội tuyến.</p>
+        <button onclick="window.open('${blobUrl}','_blank')" style="
+          padding:10px 20px;background:rgba(0,245,255,0.1);border:1px solid rgba(0,245,255,0.3);
+          border-radius:8px;color:#00f5ff;font-family:Rajdhani,sans-serif;font-size:0.9rem;
+          font-weight:700;cursor:pointer;">Mở trong tab mới</button>
+      </div>`;
+    };
+  } catch {
+    body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ff453a;">
+      <p style="font-family:Rajdhani,sans-serif;">Không thể mở file PDF.</p></div>`;
+  }
+  document.body.appendChild(overlay);
+}
+
+/* Viewer text (TXT, CSV, MD...) */
+function showTextFileViewer(item) {
+  const overlay = createViewerOverlay(item.title, item.fileName, null);
+  const body    = overlay.querySelector('.viewer-body');
+  body.style.cssText = 'overflow-y:auto;padding:20px;';
+
+  try {
+    const blob   = dataUrlToBlob(item.content);
+    const reader = new FileReader();
+    reader.onload = e => {
+      body.innerHTML = `
+        <pre style="font-family:'Share Tech Mono',monospace;font-size:0.82rem;line-height:1.6;
+          color:#dde6ff;white-space:pre-wrap;word-break:break-word;margin:0;
+          max-width:900px;">${escHtml(e.target.result)}</pre>`;
+    };
+    reader.onerror = () => { body.innerHTML = '<p style="color:#ff453a;padding:20px;font-family:Rajdhani,sans-serif;">Không đọc được file.</p>'; };
+    reader.readAsText(blob, 'UTF-8');
+  } catch {
+    body.innerHTML = '<p style="color:#ff453a;padding:20px;font-family:Rajdhani,sans-serif;">Lỗi khi mở file text.</p>';
+  }
+  document.body.appendChild(overlay);
+}
+
+/* Viewer audio */
+function showAudioViewer(item) {
+  let blobUrl;
+  const cleanup = () => blobUrl && URL.revokeObjectURL(blobUrl);
+  const overlay = createViewerOverlay(item.title, item.fileName, cleanup);
+  const body    = overlay.querySelector('.viewer-body');
+  body.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:32px;';
+
+  try {
+    blobUrl = URL.createObjectURL(dataUrlToBlob(item.content));
+    body.innerHTML = `
+      <div style="text-align:center;width:100%;max-width:480px;">
+        <i class="fas fa-music" style="font-size:4rem;color:#30d158;margin-bottom:24px;
+          display:block;filter:drop-shadow(0 0 12px #30d158);"></i>
+        <p style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:1rem;
+          color:#dde6ff;margin-bottom:20px;">${escHtml(item.fileName || item.title)}</p>
+        <audio controls autoplay style="width:100%;outline:none;">
+          <source src="${blobUrl}">
+          Trình duyệt không hỗ trợ phát audio.
+        </audio>
+      </div>`;
+  } catch {
+    body.innerHTML = '<p style="color:#ff453a;font-family:Rajdhani,sans-serif;">Không thể phát audio.</p>';
+  }
+  document.body.appendChild(overlay);
+}
+
+/* Viewer video */
+function showVideoViewer(item) {
+  let blobUrl;
+  const cleanup = () => blobUrl && URL.revokeObjectURL(blobUrl);
+  const overlay = createViewerOverlay(item.title, item.fileName, cleanup);
+  const body    = overlay.querySelector('.viewer-body');
+  body.style.cssText = 'display:flex;align-items:center;justify-content:center;background:#000;';
+
+  try {
+    blobUrl = URL.createObjectURL(dataUrlToBlob(item.content));
+    body.innerHTML = `
+      <video controls autoplay style="max-width:100%;max-height:100%;outline:none;">
+        <source src="${blobUrl}">
+        Trình duyệt không hỗ trợ phát video.
+      </video>`;
+  } catch {
+    body.innerHTML = '<p style="color:#ff453a;font-family:Rajdhani,sans-serif;padding:20px;">Không thể phát video.</p>';
+  }
+  document.body.appendChild(overlay);
 }
 
 /* ============================================================
@@ -1134,16 +1330,24 @@ function createCard(item, isTrash) {
   if (item.type === 'note') {
     contentHtml = `<p class="card-note-content">${escHtml(item.content)}</p>`;
   } else if (item.type === 'file') {
-    /* Tài liệu: icon theo loại + tên file + kích thước */
     const [mime, sizeStr] = (item.description || '|0').split('|');
     const fileSize = parseInt(sizeStr) || 0;
-    const info = getFileIconInfo(mime, item.fileName || item.title);
+    const info     = getFileIconInfo(mime, item.fileName || item.title);
+    const ext      = (item.fileName || '').split('.').pop().toLowerCase();
+    /* Những loại browser xem được trực tiếp */
+    const canPreview = mime.includes('pdf') || mime.startsWith('text/') ||
+                       mime.startsWith('audio/') || mime.startsWith('video/') ||
+                       ['txt','csv','md','pdf','mp3','mp4','wav','webm'].includes(ext);
     contentHtml = `
-      <div class="card-file-body">
+      <div class="card-file-body${!isTrash ? ' card-file-clickable' : ''}" data-item-id="${item.id}">
         <i class="fas ${info.icon} card-file-icon" style="color:${info.color}"></i>
         <div class="card-file-meta">
           <span class="card-file-name">${escHtml(item.fileName || item.title)}</span>
           <span class="card-file-size">${fileSize ? formatFileSize(fileSize) : '—'}</span>
+          ${!isTrash ? `<span class="card-file-hint">
+            <i class="fas ${canPreview ? 'fa-eye' : 'fa-download'}"></i>
+            ${canPreview ? 'Nhấn để xem' : 'Nhấn để tải'}
+          </span>` : ''}
         </div>
       </div>`;
   } else if (item.type === 'image') {
@@ -1192,6 +1396,12 @@ function createCard(item, isTrash) {
   if (!isTrash) {
     card.querySelector('.card-menu-btn')
       ?.addEventListener('click', e => { e.stopPropagation(); openCardMenu(item.id, e.currentTarget); });
+
+    /* Nhấn trực tiếp vào file body → mở viewer */
+    const fileBody = card.querySelector('.card-file-clickable');
+    if (fileBody) {
+      fileBody.addEventListener('click', () => openItemViewer(item));
+    }
   } else {
     card.querySelector('.btn-restore')?.addEventListener('click', () => restoreItem(item.id));
     card.querySelector('.btn-perm-delete')?.addEventListener('click', () => confirmDeletePermanent(item.id));
@@ -1205,9 +1415,16 @@ function openCardMenu(itemId, btnEl) {
   const item = state.items.find(i => i.id === itemId);
   const canEdit = item && item.type !== 'image'; // Ảnh chỉ edit tên, cũng hỗ trợ
 
+  /* Icon + label cho nút Mở tùy loại */
+  const viewLabels = { note:'Đọc Ghi Chú', image:'Xem Ảnh', link:'Mở Liên Kết', file:'Mở File' };
+  const viewIcons  = { note:'fa-book-open', image:'fa-expand', link:'fa-arrow-up-right-from-square', file:'fa-folder-open' };
+
   const dropdown = document.createElement('div');
   dropdown.className = 'card-menu-dropdown';
   dropdown.innerHTML = `
+    <button class="dropdown-item" data-a="view">
+      <i class="fas ${viewIcons[item?.type] || 'fa-eye'}"></i> ${viewLabels[item?.type] || 'Mở'}
+    </button>
     <button class="dropdown-item edit" data-a="edit"><i class="fas fa-pen-to-square"></i> Chỉnh Sửa</button>
     <button class="dropdown-item" data-a="download"><i class="fas fa-download"></i> Tải Xuống</button>
     <div class="dropdown-divider"></div>
@@ -1215,6 +1432,7 @@ function openCardMenu(itemId, btnEl) {
     <button class="dropdown-item danger" data-a="delete"><i class="fas fa-fire"></i> Xóa Vĩnh Viễn</button>`;
 
   btnEl.parentElement.appendChild(dropdown);
+  dropdown.querySelector('[data-a="view"]')    .addEventListener('click', () => { openItemViewer(item);          dropdown.remove(); });
   dropdown.querySelector('[data-a="edit"]')    .addEventListener('click', () => { openEditModal(itemId);         dropdown.remove(); });
   dropdown.querySelector('[data-a="download"]').addEventListener('click', () => { downloadItem(itemId);          dropdown.remove(); });
   dropdown.querySelector('[data-a="trash"]')   .addEventListener('click', () => { moveToTrash(itemId);           dropdown.remove(); });
