@@ -598,7 +598,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
-function downloadItem(id) {
+async function downloadItem(id) {
   const item = state.items.find(i => i.id === id);
   if (!item) return;
 
@@ -618,7 +618,6 @@ function downloadItem(id) {
       fileName = slugify(item.title) + '.txt';
 
     } else if (item.type === 'image') {
-      /* QUAN TRỌNG: Phải chuyển data: URL → Blob để iOS Safari tải được */
       blob     = dataUrlToBlob(item.content);
       fileName = item.fileName || slugify(item.title) + '.jpg';
 
@@ -632,32 +631,42 @@ function downloadItem(id) {
       fileName = slugify(item.title) + '.txt';
     }
 
+    /* ── ƯU TIÊN 1: Web Share API (iOS 15+, Android Chrome) ──
+       Hiện bảng native: "Lưu Ảnh", "Lưu vào Files", AirDrop...
+       Phải gọi trong cùng user-gesture (click), nên không được await trước đây */
+    if (navigator.canShare) {
+      const shareFile = new File([blob], fileName, { type: blob.type });
+      if (navigator.canShare({ files: [shareFile] })) {
+        await navigator.share({ files: [shareFile], title: item.title });
+        /* Nếu tới đây = user đã chia sẻ thành công (hoặc đóng sheet) */
+        return;
+      }
+    }
+
+    /* ── ƯU TIÊN 2: Anchor download (Android, Desktop) ── */
     const blobUrl = URL.createObjectURL(blob);
 
     if (isIOS()) {
-      /* iOS Safari: mở tab mới — người dùng nhấn giữ → "Save to Files" */
+      /* iOS không hỗ trợ Share API với loại file này → mở tab */
       const win = window.open(blobUrl, '_blank');
-      if (!win) {
-        /* Popup bị chặn — fallback: thay đổi location */
-        location.href = blobUrl;
-      }
-      showToast('iOS: Nhấn giữ ảnh/văn bản → "Lưu vào Files" để tải về.', 'info');
+      if (!win) location.href = blobUrl;
+      showToast('Nhấn giữ nội dung → "Lưu vào Files".', 'info');
     } else {
-      /* Android / Desktop: anchor click bình thường */
       const a = document.createElement('a');
-      a.href     = blobUrl;
+      a.href = blobUrl;
       a.download = fileName;
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      showToast(`Đang tải xuống "${item.title}"...`, 'success');
+      showToast(`Đang tải "${item.title}"...`, 'success');
     }
 
-    /* Revoke sau 60 giây — đủ thời gian browser xử lý download */
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 
   } catch (err) {
+    /* AbortError = người dùng tự đóng share sheet → không phải lỗi */
+    if (err.name === 'AbortError') return;
     console.error('[PSH] Download error:', err);
     showToast('Tải xuống thất bại. Vui lòng thử lại!', 'error');
   }
